@@ -1,0 +1,13 @@
+# Runtime artifacts - the stack installs itself into this folder; none of it
+# belongs in git. The repo is scripts + README only.
+repos/
+pgsql/
+pgdata/
+downloads/
+logs/
+config/
+
+# state/ holds real secrets: the wck_ API key, postgres passwords, the
+# DPAPI-wrapped GitHub PAT, host agent tokens, and the orchestrator SQLite db.
+state/
+*.sqlite
