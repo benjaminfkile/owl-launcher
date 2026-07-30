@@ -1,13 +1,11 @@
 ﻿# wisper.ps1 - one-command local wisper MANAGER stack (no host components).
 #
-#   .\wisper.ps1 -Init <branch> -Token ghp_xxx   cold start: install everything from
-#                                                <branch> (PAT stored - only needed once)
+#   .\wisper.ps1 -Init <branch>        cold start: install everything from <branch>
 #   .\wisper.ps1                       start the stack (after it has been installed)
 #   .\wisper.ps1 -Refetch <branch>     pull <branch> in all repos, rebuild, restart
 #                                      (-Init on an installed stack does the same)
 #   .\wisper.ps1 -Down                 stop everything (services + postgres)
 #   .\wisper.ps1 -Status               health overview
-#   .\wisper.ps1 -Token ghp_xxx        store/rotate the PAT without doing anything else
 #
 # What it runs (all loopback-only, no Windows services, no firewall changes):
 #   postgres      127.0.0.1:3005   portable EDB binaries in pgsql\, cluster in pgdata\
@@ -20,8 +18,8 @@
 # service (5432) is never touched.
 #
 # Secrets: state\stack-state.json holds generated passwords + the wck_ API key
-# (plaintext; OS user boundary is the security model). The GitHub PAT is stored
-# DPAPI-encrypted (current Windows user only) and is used only for git clone/fetch.
+# (plaintext; OS user boundary is the security model). The repos are public, so
+# git needs no authentication.
 #
 # Host-side pieces (wisp, wisp-agent) are deliberately NOT here - point a host's
 # wisp-agent at http://<this-machine>:8090 only if you also rebind/expose the API.
@@ -31,7 +29,6 @@ param(
     [string]$Init = "",         # branch name for a cold start: install + build from it
                                 # (on an already-installed stack, same as -Refetch)
     [string]$Refetch = "",      # branch name: pull all repos on it, rebuild, restart
-    [string]$Token = "",        # GitHub classic PAT (ghp_...); stored encrypted for later runs
     [switch]$Down,
     [switch]$Status,
     [int]$PgPort = 3005,
@@ -76,17 +73,6 @@ function New-RandomHex([int]$Bytes) {
     $buf = New-Object byte[] $Bytes
     [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($buf)
     ($buf | ForEach-Object { $_.ToString("x2") }) -join ""
-}
-
-# DPAPI-protect the PAT (decryptable only by this Windows user on this machine).
-function Protect-Pat([string]$Plain) {
-    ConvertTo-SecureString $Plain -AsPlainText -Force | ConvertFrom-SecureString
-}
-function Unprotect-Pat([string]$Cipher) {
-    $ss = ConvertTo-SecureString $Cipher
-    $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($ss)
-    try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) }
-    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
 }
 
 # Run a native command silently, return exit code. Drops ErrorActionPreference so
@@ -197,14 +183,6 @@ function Stop-Stack {
     Stop-Postgres
 }
 
-# Per-invocation auth header keeps the PAT out of .git\config and remote URLs.
-function Get-GitAuthArgs($State) {
-    if ($null -eq $State -or $null -eq $State.patDpapi) { return @() }
-    $pat = Unprotect-Pat $State.patDpapi
-    $b64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$pat"))
-    @("-c", "http.extraHeader=Authorization: Basic $b64")
-}
-
 function Invoke-Builds {
     Write-Host "-- building" -ForegroundColor Cyan
     Write-Host "  wisper-api (dotnet build -c Release)"
@@ -237,7 +215,7 @@ if ($Down) {
 if ($Status) {
     Write-Host "== wisper status ==" -ForegroundColor Cyan
     $st = Get-State
-    if ($null -eq $st) { Write-Host "  not installed (no state file) - run .\wisper.ps1 -Init <branch> -Token ghp_xxx"; return }
+    if ($null -eq $st) { Write-Host "  not installed (no state file) - run .\wisper.ps1 -Init <branch>"; return }
     if ($null -ne $st.pgPort) { $PgPort = [int]$st.pgPort }
     $pg = Test-PgRunning
     Write-Host ("  postgres      {0}  (127.0.0.1:{1})" -f @("STOPPED", "running")[[int]$pg], $PgPort)
@@ -267,15 +245,6 @@ foreach ($d in $Dirs.Values) {
 
 $state = Get-State
 if ($null -eq $state) { $state = [pscustomobject]@{} }
-
-if ($Token) {
-    Set-StateProp $state "patDpapi" (Protect-Pat $Token)
-    Save-State $state
-    Write-Host "GitHub PAT stored (DPAPI, this Windows user only)."
-} elseif ($null -eq $state.patDpapi -and $env:GITHUB_PAT) {
-    Set-StateProp $state "patDpapi" (Protect-Pat $env:GITHUB_PAT)
-    Save-State $state
-}
 
 if ($null -eq $state.pgSuperPassword)  { Set-StateProp $state "pgSuperPassword"  (New-RandomHex 18) }
 if ($null -eq $state.pgWisperPassword) { Set-StateProp $state "pgWisperPassword" (New-RandomHex 18) }
@@ -312,7 +281,7 @@ if ($Init) {
     }
 }
 if ($needClone.Count -gt 0 -and $null -eq $state.branch) {
-    throw "Not installed yet - cold start with: .\wisper.ps1 -Init <branch> -Token ghp_xxx"
+    throw "Not installed yet - cold start with: .\wisper.ps1 -Init <branch>"
 }
 
 if ($firstRun) {
@@ -326,14 +295,10 @@ if ($firstRun) {
     $sdks = Invoke-Capture "dotnet" @("--list-sdks")
     if ($sdks -notmatch "(^|`n)8\.") { throw ".NET 8 SDK not found (wisper-api targets net8.0)" }
 
-    if ($needClone.Count -gt 0 -and $null -eq $state.patDpapi) {
-        throw "First run needs a GitHub classic PAT to clone private repos: .\wisper.ps1 -Init <branch> -Token ghp_xxx"
-    }
-    $gitAuth = Get-GitAuthArgs $state
     foreach ($r in $needClone) {
         Write-Host "  cloning $r (branch $($state.branch))"
-        & git @gitAuth clone --quiet --branch $state.branch "https://github.com/$GitHubUser/$r.git" (Join-Path $Dirs.Repos $r)
-        if ($LASTEXITCODE -ne 0) { throw "clone of $r failed (bad PAT / branch '$($state.branch)' missing?)" }
+        & git clone --quiet --branch $state.branch "https://github.com/$GitHubUser/$r.git" (Join-Path $Dirs.Repos $r)
+        if ($LASTEXITCODE -ne 0) { throw "clone of $r failed (branch '$($state.branch)' missing?)" }
     }
 
     if ($needClone.Count -gt 0) { Invoke-Builds }
@@ -390,16 +355,14 @@ if ($firstRun) {
 if ($Refetch) {
     Write-Host "== refetch branch '$Refetch' ==" -ForegroundColor Cyan
     Stop-Stack
-    if ($null -eq $state.patDpapi) { throw "No stored PAT - run .\wisper.ps1 -Token ghp_xxx -Refetch $Refetch" }
-    $gitAuth = Get-GitAuthArgs $state
     foreach ($r in $Repos) {
         $dest = Join-Path $Dirs.Repos $r
         Write-Host "  $r : fetch + checkout $Refetch"
-        & git @gitAuth -C $dest fetch --quiet origin
-        if ($LASTEXITCODE -ne 0) { throw "$r fetch failed (PAT expired?)" }
+        & git -C $dest fetch --quiet origin
+        if ($LASTEXITCODE -ne 0) { throw "$r fetch failed" }
         & git -C $dest checkout --quiet $Refetch
         if ($LASTEXITCODE -ne 0) { throw "$r has no branch '$Refetch'" }
-        & git @gitAuth -C $dest pull --ff-only --quiet origin $Refetch
+        & git -C $dest pull --ff-only --quiet origin $Refetch
         if ($LASTEXITCODE -ne 0) { throw "$r pull --ff-only failed (diverged/local changes in repos\$r)" }
     }
     Set-StateProp $state "branch" $Refetch

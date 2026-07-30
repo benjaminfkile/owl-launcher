@@ -12,7 +12,7 @@ below) — `wisper.ps1` itself is only the manager/marketplace side.
 
 ```powershell
 # first time ever (installs everything, then starts):
-.\wisper.ps1 -Init <branch> -Token ghp_xxxxxxxx
+.\wisper.ps1 -Init <branch>
 
 # every day after that:
 .\wisper.ps1            # start
@@ -32,11 +32,10 @@ key the script prints (also in `state\stack-state.json` under `wckKey`).
 | Command | What it does |
 |---|---|
 | `.\wisper.ps1` | Start the stack. Errors with instructions if never installed; tells you if it is already running. |
-| `.\wisper.ps1 -Init <branch> -Token ghp_xxx` | Cold start: install + build everything from `<branch>`. On an already-installed stack, `-Init <branch>` just behaves like `-Refetch <branch>`. |
+| `.\wisper.ps1 -Init <branch>` | Cold start: install + build everything from `<branch>`. On an already-installed stack, `-Init <branch>` just behaves like `-Refetch <branch>`. |
 | `.\wisper.ps1 -Refetch <branch>` | Stop the stack, `fetch` + `checkout` + fast-forward pull `<branch>` in all three repos, rebuild, restart. Database migrations (DbUp) apply automatically when wisper-api boots. |
 | `.\wisper.ps1 -Down` | Stop all services and postgres. Kills full process trees; nothing is left running. |
 | `.\wisper.ps1 -Status` | Per-service running/health overview + the API key. |
-| `.\wisper.ps1 -Token ghp_xxx` | Store or rotate the GitHub PAT (then continues with a normal start). |
 
 Port overrides exist as parameters (`-PgPort -ApiPort -WebPort -AdminPort`) but
 the postgres port is pinned at install time — see notes below.
@@ -49,17 +48,6 @@ the postgres port is pinned at install time — see notes below.
 | wisper-api | `http://127.0.0.1:3006` (health: `/healthz`) |
 | wisper-web | `http://localhost:3007` |
 | wisper-admin | `http://localhost:3008` |
-
-## The GitHub PAT
-
-- Needed **once**, at `-Init` (the repos are private). Also accepted from
-  `$env:GITHUB_PAT` if set when no PAT is stored yet.
-- Stored **DPAPI-encrypted** in `state\stack-state.json` (`patDpapi`) — only
-  your Windows account on this machine can decrypt it. `-Refetch` reuses it
-  silently; plain starts never need git at all.
-- It is passed to git as a per-invocation header, so it never appears in
-  `.git\config`, remote URLs, or the Windows credential manager.
-- Rotate it any time with `.\wisper.ps1 -Token ghp_newtoken`.
 
 ## Folder layout
 
@@ -120,8 +108,8 @@ other projects.
 `host.ps1` brings up the host side on this same machine — **wisp** (the broker,
 `http://127.0.0.1:3009`) and **wisp-agent** (tunnels into the local wisper-api;
 control panel at `http://localhost:4600`). It shares this folder: same
-`repos\` (adds wisp + wisp-agent), same state file (reuses the stored PAT and
-the wck key), but its own pid file, so the two scripts never interfere.
+`repos\` (adds wisp + wisp-agent), same state file (reuses the wck key), but
+its own pid file, so the two scripts never interfere.
 
 ```powershell
 # first time (manager must have been -Init'd already; Docker should be running):
@@ -173,7 +161,7 @@ boot) and its **web UI** (`http://localhost:4400`). Same conventions: shared
 `repos\`/`state\`/`logs\`, own pid file, `-Init`/`-Refetch`/`-Down`/`-Status`.
 
 ```powershell
-.\orchestrator.ps1 -Init grunt     # first time (uses the stored PAT)
+.\orchestrator.ps1 -Init grunt     # first time
 .\orchestrator.ps1                 # start   |   -Down stop   |   -Status health
 ```
 

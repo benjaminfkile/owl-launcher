@@ -24,7 +24,7 @@
 # conflicts with it.
 #
 # Shares this folder: repos\ (adds orchestrator), logs\, state\stack-state.json
-# (stored PAT + wck key), own pid file (state\orch-pids.json). The SQLite DB is
+# (wck key), own pid file (state\orch-pids.json). The SQLite DB is
 # kept in state\orchestrator.sqlite via ORCH_DB_PATH. NOTE: the orchestrator's
 # encrypted secret store + dispatch logs live in %APPDATA%\orchestrator (its
 # design; master key in the OS keychain) - deleting this folder does not remove
@@ -34,7 +34,6 @@
 param(
     [string]$Init = "",         # branch for a cold start (also refetches if installed)
     [string]$Refetch = "",      # branch: pull, rebuild, restart
-    [string]$Token = "",        # GitHub classic PAT; stored (shared with wisper.ps1)
     [switch]$Down,
     [switch]$Status,
     [int]$OrchPort = 3010,
@@ -70,15 +69,6 @@ function Save-State($State) {
 }
 function Set-StateProp($State, [string]$Name, $Value) {
     $State | Add-Member -NotePropertyName $Name -NotePropertyValue $Value -Force
-}
-function Protect-Pat([string]$Plain) {
-    ConvertTo-SecureString $Plain -AsPlainText -Force | ConvertFrom-SecureString
-}
-function Unprotect-Pat([string]$Cipher) {
-    $ss = ConvertTo-SecureString $Cipher
-    $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($ss)
-    try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) }
-    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
 }
 function Invoke-Quiet([string]$File, [string[]]$Arguments = @()) {
     $eap = $ErrorActionPreference; $ErrorActionPreference = "Continue"
@@ -141,13 +131,6 @@ function Stop-Orch {
         Remove-Item $PidsFile -Force -ErrorAction SilentlyContinue
     }
 }
-function Get-GitAuthArgs($State) {
-    if ($null -eq $State -or $null -eq $State.patDpapi) { return @() }
-    $pat = Unprotect-Pat $State.patDpapi
-    $b64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$pat"))
-    @("-c", "http.extraHeader=Authorization: Basic $b64")
-}
-
 # The untracked vite override: same shape as web\vite.config.ts but with this
 # stack's /api proxy target. Regenerated on every build so port params stick.
 function Write-ViteLocalConfig {
@@ -232,13 +215,8 @@ foreach ($d in $Dirs.Values) {
 $state = Get-State
 if ($null -eq $state) { $state = [pscustomobject]@{} }
 
-if ($Token) {
-    Set-StateProp $state "patDpapi" (Protect-Pat $Token)
-    Save-State $state
-    Write-Host "GitHub PAT stored (DPAPI, this Windows user only)."
-}
 if ($null -eq $state.wckKey) {
-    throw "No wck_ API key in state - stand up the manager first: .\wisper.ps1 -Init <branch> -Token ghp_xxx"
+    throw "No wck_ API key in state - stand up the manager first: .\wisper.ps1 -Init <branch>"
 }
 
 # ------------------------------------------------------------------ install / refetch
@@ -263,13 +241,9 @@ if ($needClone) {
     foreach ($tool in @("git", "node", "npm")) {
         if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "Missing required tool: $tool" }
     }
-    if ($null -eq $state.patDpapi) {
-        throw "No stored PAT - pass it once: .\orchestrator.ps1 -Init <branch> -Token ghp_xxx"
-    }
-    $gitAuth = Get-GitAuthArgs $state
     Write-Host "  cloning orchestrator (branch $($state.orchBranch))"
-    & git @gitAuth clone --quiet --branch $state.orchBranch "https://github.com/$GitHubUser/orchestrator.git" $RepoDir
-    if ($LASTEXITCODE -ne 0) { throw "clone of orchestrator failed (bad PAT / branch '$($state.orchBranch)' missing?)" }
+    & git clone --quiet --branch $state.orchBranch "https://github.com/$GitHubUser/orchestrator.git" $RepoDir
+    if ($LASTEXITCODE -ne 0) { throw "clone of orchestrator failed (branch '$($state.orchBranch)' missing?)" }
     Invoke-OrchBuild
     Write-Host "== orchestrator install done ==" -ForegroundColor Green
 }
@@ -277,16 +251,14 @@ if ($needClone) {
 if ($Refetch) {
     Write-Host "== orchestrator refetch '$Refetch' ==" -ForegroundColor Cyan
     Stop-Orch
-    if ($null -eq $state.patDpapi) { throw "No stored PAT - run .\orchestrator.ps1 -Token ghp_xxx -Refetch $Refetch" }
     Set-StateProp $state "orchBranch" $Refetch
     Save-State $state
-    $gitAuth = Get-GitAuthArgs $state
     Write-Host "  orchestrator : fetch + checkout $Refetch"
-    & git @gitAuth -C $RepoDir fetch --quiet origin
-    if ($LASTEXITCODE -ne 0) { throw "orchestrator fetch failed (PAT expired?)" }
+    & git -C $RepoDir fetch --quiet origin
+    if ($LASTEXITCODE -ne 0) { throw "orchestrator fetch failed" }
     & git -C $RepoDir checkout --quiet $Refetch
     if ($LASTEXITCODE -ne 0) { throw "orchestrator has no branch '$Refetch'" }
-    & git @gitAuth -C $RepoDir pull --ff-only --quiet origin $Refetch
+    & git -C $RepoDir pull --ff-only --quiet origin $Refetch
     if ($LASTEXITCODE -ne 0) { throw "orchestrator pull --ff-only failed (diverged/local changes in repos\orchestrator)" }
     Invoke-OrchBuild
     # SQLite migrations run automatically when the API boots below.

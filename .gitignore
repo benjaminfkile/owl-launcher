@@ -7,7 +7,7 @@ downloads/
 logs/
 config/
 
-# state/ holds real secrets: the wck_ API key, postgres passwords, the
-# DPAPI-wrapped GitHub PAT, host agent tokens, and the orchestrator SQLite db.
+# state/ holds real secrets: the wck_ API key, postgres passwords, host agent
+# tokens, and the orchestrator SQLite db.
 state/
 *.sqlite

@@ -18,8 +18,8 @@
 #   wisp-agent    dials ws://127.0.0.1:3006/agent; control panel http://localhost:4600
 #
 # Shares this folder with wisper.ps1: repos\ (adds wisp, wisp-agent), logs\, and
-# state\stack-state.json (stored PAT, wck_ API key, plus host-side entries). Uses
-# its own pid file (state\host-pids.json) so the two scripts never fight.
+# state\stack-state.json (wck_ API key, plus host-side entries). Uses its own
+# pid file (state\host-pids.json) so the two scripts never fight.
 #
 # First start auto-registers host "local-host" against wisper-api (its one-time
 # wht_ agent token lands in the state file) and seeds "hostImages" in the state
@@ -40,7 +40,6 @@ param(
     [string]$Init = "",         # branch for a cold start (also refetches if installed)
     [string]$Refetch = "",      # branch: pull wisp + wisp-agent, rebuild, restart
     [string]$AgentBranch = "",  # wisp-agent branch override (default: same as -Init/-Refetch)
-    [string]$Token = "",        # GitHub classic PAT; stored (shared with wisper.ps1)
     [switch]$Down,
     [switch]$Status,
     [int]$WispPort = 3009,
@@ -80,15 +79,6 @@ function New-RandomHex([int]$Bytes) {
     $buf = New-Object byte[] $Bytes
     [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($buf)
     ($buf | ForEach-Object { $_.ToString("x2") }) -join ""
-}
-function Protect-Pat([string]$Plain) {
-    ConvertTo-SecureString $Plain -AsPlainText -Force | ConvertFrom-SecureString
-}
-function Unprotect-Pat([string]$Cipher) {
-    $ss = ConvertTo-SecureString $Cipher
-    $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($ss)
-    try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) }
-    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
 }
 function Invoke-Quiet([string]$File, [string[]]$Arguments = @()) {
     $eap = $ErrorActionPreference; $ErrorActionPreference = "Continue"
@@ -155,12 +145,6 @@ function Stop-HostStack {
         }
         Remove-Item $PidsFile -Force -ErrorAction SilentlyContinue
     }
-}
-function Get-GitAuthArgs($State) {
-    if ($null -eq $State -or $null -eq $State.patDpapi) { return @() }
-    $pat = Unprotect-Pat $State.patDpapi
-    $b64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$pat"))
-    @("-c", "http.extraHeader=Authorization: Basic $b64")
 }
 function Invoke-WisperApi {
     param([string]$Method, [string]$Path, $Body = $null, [string]$ApiKey)
@@ -243,13 +227,8 @@ foreach ($d in $Dirs.Values) {
 $state = Get-State
 if ($null -eq $state) { $state = [pscustomobject]@{} }
 
-if ($Token) {
-    Set-StateProp $state "patDpapi" (Protect-Pat $Token)
-    Save-State $state
-    Write-Host "GitHub PAT stored (DPAPI, this Windows user only)."
-}
 if ($null -eq $state.wckKey) {
-    throw "No wck_ API key in state - stand up the manager first: .\wisper.ps1 -Init <branch> -Token ghp_xxx"
+    throw "No wck_ API key in state - stand up the manager first: .\wisper.ps1 -Init <branch>"
 }
 if ($null -eq $state.wispAppToken) { Set-StateProp $state "wispAppToken" (New-RandomHex 24); Save-State $state }
 
@@ -283,15 +262,11 @@ if ($needClone.Count -gt 0) {
     foreach ($tool in @("git", "go")) {
         if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "Missing required tool: $tool" }
     }
-    if ($null -eq $state.patDpapi) {
-        throw "No stored PAT - pass it once: .\host.ps1 -Init <branch> -Token ghp_xxx"
-    }
-    $gitAuth = Get-GitAuthArgs $state
     foreach ($r in $needClone) {
         $b = Get-RepoBranch $r
         Write-Host "  cloning $r (branch $b)"
-        & git @gitAuth clone --quiet --branch $b "https://github.com/$GitHubUser/$r.git" (Join-Path $Dirs.Repos $r)
-        if ($LASTEXITCODE -ne 0) { throw "clone of $r failed (bad PAT / branch '$b' missing?)" }
+        & git clone --quiet --branch $b "https://github.com/$GitHubUser/$r.git" (Join-Path $Dirs.Repos $r)
+        if ($LASTEXITCODE -ne 0) { throw "clone of $r failed (branch '$b' missing?)" }
     }
     Invoke-HostBuilds
 
@@ -336,21 +311,19 @@ if ($needClone.Count -gt 0) {
 if ($Refetch) {
     Write-Host "== host refetch '$Refetch' ==" -ForegroundColor Cyan
     Stop-HostStack
-    if ($null -eq $state.patDpapi) { throw "No stored PAT - run .\host.ps1 -Token ghp_xxx -Refetch $Refetch" }
     Set-StateProp $state "hostBranch" $Refetch
     if ($AgentBranch) { Set-StateProp $state "agentBranch" $AgentBranch }
     else { Set-StateProp $state "agentBranch" $Refetch }
     Save-State $state
-    $gitAuth = Get-GitAuthArgs $state
     foreach ($r in $HostRepos) {
         $b = Get-RepoBranch $r
         $dest = Join-Path $Dirs.Repos $r
         Write-Host "  $r : fetch + checkout $b"
-        & git @gitAuth -C $dest fetch --quiet origin
-        if ($LASTEXITCODE -ne 0) { throw "$r fetch failed (PAT expired?)" }
+        & git -C $dest fetch --quiet origin
+        if ($LASTEXITCODE -ne 0) { throw "$r fetch failed" }
         & git -C $dest checkout --quiet $b
         if ($LASTEXITCODE -ne 0) { throw "$r has no branch '$b'" }
-        & git @gitAuth -C $dest pull --ff-only --quiet origin $b
+        & git -C $dest pull --ff-only --quiet origin $b
         if ($LASTEXITCODE -ne 0) { throw "$r pull --ff-only failed (diverged/local changes in repos\$r)" }
     }
     Invoke-HostBuilds
