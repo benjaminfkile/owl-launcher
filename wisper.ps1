@@ -22,7 +22,7 @@
 # git needs no authentication.
 #
 # Host-side pieces (wisp, wisp-agent) are deliberately NOT here - point a host's
-# wisp-agent at http://<this-machine>:8090 only if you also rebind/expose the API.
+# wisp-agent at http://<this-machine>:3006 (the -ApiPort value) only if you also rebind/expose the API.
 
 [CmdletBinding()]
 param(
@@ -40,7 +40,7 @@ param(
     # Lease creation is SYNCHRONOUS through the container's entire userdata
     # provision (fx-sandbox-base builds ~6 min, worst case much longer), so this
     # must exceed the longest provision. Default 50 min; wisper-api's built-in
-    # default is a fatal 120s. See LEASE-TIMEOUTS-RUNBOOK.md.
+    # default is a fatal 120s. See the timeout parameters in README.md.
     [int]$RelayTimeoutMs = 3000000
 )
 
@@ -398,8 +398,8 @@ $apiDll = Get-ChildItem (Join-Path $Dirs.Repos "wisper-api\src\Wisper.Api\bin\Re
     -Filter "Wisper.Api.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($null -eq $apiDll) { throw "Wisper.Api.dll not found - run .\wisper.ps1 -Refetch $($state.branch) to build" }
 $k = $state.wckKey
-# Development is required: the JWT-audience check fails closed outside it, and it
-# gates the dev endpoints. Loopback-only, so leaving dev endpoints on is fine.
+# Development enables the dev endpoints (with Tunnel__EnableDevEndpoints) and config host tokens;
+# API-key auth works in any environment. Loopback-only, so leaving dev endpoints on is fine.
 $pids."wisper-api" = Start-Svc -Name "wisper-api" -File "dotnet" `
     -Arguments @($apiDll.FullName, "--urls", "http://127.0.0.1:$ApiPort") `
     -Cwd $apiDll.DirectoryName -Env @{

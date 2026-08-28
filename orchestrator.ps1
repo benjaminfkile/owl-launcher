@@ -43,7 +43,7 @@ param(
     # Lease creation is SYNCHRONOUS through the container's entire userdata
     # provision (fx-sandbox-base builds ~6 min, worst case much longer); the
     # orchestrator's built-in default is a fatal 150s. Keep below the playbook's
-    # ttl_seconds - 60 dispatch deadline - see LEASE-TIMEOUTS-RUNBOOK.md.
+    # ttl_seconds - 60 dispatch deadline (see the timeout parameters in README.md).
     [int]$CreateLeaseTimeoutMs = 3000000
 )
 

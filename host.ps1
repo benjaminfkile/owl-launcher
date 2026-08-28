@@ -15,7 +15,7 @@
 #
 # What it runs (loopback-only, no services):
 #   wisp          http://127.0.0.1:3009   broker; needs Docker running to lease
-#   wisp-agent    dials ws://127.0.0.1:3006/agent; control panel http://localhost:4600
+#   wisp-agent    dials ws://127.0.0.1:3006/agent (no control panel on the grunt branch)
 #
 # Shares this folder with wisper.ps1: repos\ (adds wisp, wisp-agent), logs\, and
 # state\stack-state.json (wck_ API key, plus host-side entries). Uses its own
@@ -23,7 +23,7 @@
 #
 # First start auto-registers host "local-host" against wisper-api (its one-time
 # wht_ agent token lands in the state file) and seeds "hostImages" in the state
-# file with one zero-priced image so leases cost $0 with no Stripe.
+# file with one priced default image (33 cents/min); the manager wallet seed pays for it, no Stripe.
 #
 # WHAT THE HOST ADVERTISES is the "hostImages" array in state\stack-state.json:
 #   { image_ref, price_cents_per_min, networks, max_ttl_seconds, enabled }
@@ -48,7 +48,7 @@ param(
     # e.g. "50m"). Lease creation is SYNCHRONOUS through the container's entire
     # userdata provision (fx-sandbox-base builds ~6 min, worst case much
     # longer); the agent's built-in default is a fatal 60s. Must match the
-    # manager/orchestrator ceilings - see LEASE-TIMEOUTS-RUNBOOK.md.
+    # manager/orchestrator ceilings (see the timeout parameters in README.md).
     [string]$CreateTimeout = "50m"
 )
 
@@ -426,7 +426,7 @@ if (-not $online) {
 }
 
 # The advertised images come from "hostImages" in the state file. Seeded once
-# with a zero-priced default matching the docker daemon mode; edit the array
+# with a priced default (33 cents/min) matching the docker daemon mode; edit the array
 # freely - a changed list is re-published on the next start. (Publishing must
 # happen while the tunnel is online or the API 409s host_offline.)
 if ($null -eq $state.hostImages) {
@@ -463,7 +463,7 @@ Write-Host "`n== host is up ==" -ForegroundColor Green
 Write-Host @"
 wisp            $WispUrl   (branch $($state.hostBranch))
 wisp-agent      tunneled to ws://127.0.0.1:$ApiPort/agent  (branch $($state.agentBranch))
-agent panel     http://localhost:4600  (only on branches with the control panel, e.g. wisp-agent-ui-grunt)
+agent panel     (none on the grunt branch; the older wisp-agent-ui-grunt branch is incompatible with current wisper-api)
 docker mode     $osType
 
 Host 'local-host' should show online in wisper-web Host tools.
