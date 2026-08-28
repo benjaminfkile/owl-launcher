@@ -6,8 +6,8 @@
 #                                                build the wisp-base docker image
 #                                                (-Init grunt has all isolation support;
 #                                                -AgentBranch <b> overrides the agent's
-#                                                branch, e.g. wisp-agent-ui-grunt for
-#                                                its embedded control panel)
+#                                                branch; use grunt unless you know the
+#                                                branch tracks current wisper-api)
 #   .\host.ps1                                   start wisp + agent (manager must be up)
 #   .\host.ps1 -Refetch <branch> [-AgentBranch <b>]   pull, rebuild, restart
 #   .\host.ps1 -Down                             stop wisp + agent (postgres/api untouched)
