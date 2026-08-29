@@ -78,6 +78,7 @@ logs\             <service>.out.log / .err.log per service + postgres.log
 state\            stack-state.json (secrets/config, shared by all three scripts)
                   pids.json / host-pids.json / orch-pids.json (while running)
                   orchestrator.sqlite (the orchestrator DB)
+                  secrets.enc + logs\ (orchestrator secret store and dispatch logs)
 ```
 
 `state\stack-state.json` keys: `branch`, `pgPort`, `pgSuperPassword`,
@@ -90,7 +91,7 @@ state\            stack-state.json (secrets/config, shared by all three scripts)
 `.\orchestrator.ps1 -Down` if you use them), then delete this folder. Nothing
 exists outside it except generic toolchain caches (npm, NuGet, Go) shared with
 all your other projects, the Docker images host.ps1 built, and the orchestrator's
-`%APPDATA%\orchestrator` (see below).
+master key in the OS keychain (see below).
 
 ## Notes & gotchas
 
@@ -252,10 +253,10 @@ generates an **untracked** `web\vite.config.local.ts` (UI port 4400 -> API
 3010) on every install/refetch and starts Vite with `--config
 vite.config.local.ts`; being untracked, it never blocks the `--ff-only` pull.
 
-Data caveat: the orchestrator keeps its **encrypted secret store and
-per-dispatch logs in `%APPDATA%\orchestrator`** (master key in the OS
-keychain); that's its own design and lives outside this folder. The SQLite DB,
-however, is kept here via `ORCH_DB_PATH`.
+Data note: the launcher sets `ORCH_DATA_DIR` to `state\`, so the orchestrator's
+SQLite DB (`state\orchestrator.sqlite`), its encrypted secret store
+(`state\secrets.enc`) and its per-dispatch logs (`state\logs\`) all live in
+this folder. Only the master key stays outside, in the OS keychain.
 
 ## Full-stack bring-up order
 

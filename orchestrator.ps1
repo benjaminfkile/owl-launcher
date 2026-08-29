@@ -25,10 +25,10 @@
 #
 # Shares this folder: repos\ (adds orchestrator), logs\, state\stack-state.json
 # (wck key), own pid file (state\orch-pids.json). The SQLite DB is
-# kept in state\orchestrator.sqlite via ORCH_DB_PATH. NOTE: the orchestrator's
-# encrypted secret store + dispatch logs live in %APPDATA%\orchestrator (its
-# design; master key in the OS keychain) - deleting this folder does not remove
-# those.
+# kept in state\orchestrator.sqlite, and ORCH_DATA_DIR points at state\ so the
+# orchestrator's encrypted secret store (state\secrets.enc, master key in the OS
+# keychain) and its per-dispatch logs (state\logs\) live here too. Deleting this
+# folder removes all of it; the keychain entry is the only thing left behind.
 
 [CmdletBinding()]
 param(
@@ -294,7 +294,7 @@ $pids = @{}
 $node = (Get-Command node).Source
 $pids.orchestrator = Start-Svc -Name "orchestrator" -File $node -Arguments @($distEntry) -Cwd $RepoDir -Env @{
     PORT            = "$OrchPort"
-    ORCH_DB_PATH    = (Join-Path $Dirs.State "orchestrator.sqlite")
+    ORCH_DATA_DIR   = $Dirs.State   # DB (orchestrator.sqlite), logs and secret store all under state\
     WISPER_MODE     = "v1"
     WISPER_BASE_URL = $WisperUrl
     WISPER_HOST_ID  = "local-host"
@@ -305,7 +305,7 @@ Wait-Http -Url "$OrchUrl/api/health" -TimeoutSec 60 -Name "orchestrator"
 
 # Seed/refresh the wisper API key into the orchestrator secret store on every
 # start, so it always matches the stack's key. The value is never logged; the
-# orchestrator stores it encrypted (keychain-backed) in %APPDATA%\orchestrator.
+# orchestrator stores it encrypted (keychain-backed) in state\secrets.enc.
 try {
     Invoke-WebRequest -Uri "$OrchUrl/api/secrets" -Method Put -UseBasicParsing -TimeoutSec 15 `
         -ContentType "application/json" `
@@ -325,7 +325,7 @@ Wait-Http -Url "http://localhost:$WebUiPort" -TimeoutSec 90 -Name "orchestrator-
 
 Write-Host "`n== orchestrator is up ==" -ForegroundColor Green
 Write-Host @"
-orchestrator API   $OrchUrl   (branch $($state.orchBranch); db state\orchestrator.sqlite)
+orchestrator API   $OrchUrl   (branch $($state.orchBranch); data dir state\: db, logs, secrets)
 orchestrator web   http://localhost:$WebUiPort
 wisper wiring      v1 mode -> $WisperUrl, host 'local-host', WISPER_API_KEY seeded
 
