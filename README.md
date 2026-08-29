@@ -9,6 +9,20 @@ Host-side components live in the companion **`host.ps1`** (see "The host stack"
 below) and the consumer lives in **`orchestrator.ps1`**; `wisper.ps1` itself is
 only the manager/marketplace side.
 
+## The stack
+
+| Script | Repo | What it is |
+|---|---|---|
+| `wisper.ps1` | [wisper-api](https://github.com/benjaminfkile/wisper-api) | manager API: catalog, leases, billing, tunnel for hosts |
+| `wisper.ps1` | [wisper-web](https://github.com/benjaminfkile/wisper-web) | consumer and host-owner web app |
+| `wisper.ps1` | [wisper-admin](https://github.com/benjaminfkile/wisper-admin) | operator admin web app |
+| `host.ps1` | [wisp](https://github.com/benjaminfkile/wisp) | container broker that runs leased containers on a host |
+| `host.ps1` | [wisp-agent](https://github.com/benjaminfkile/wisp-agent) | host agent that tunnels wisp to the manager |
+| `orchestrator.ps1` | [orchestrator](https://github.com/benjaminfkile/orchestrator) | first consumer: runs playbooks in rented leases |
+
+Each repo carries its own README and `docs/` folder with the full details of that
+piece; this README only covers running them together locally.
+
 ## Quick start
 
 ```powershell
