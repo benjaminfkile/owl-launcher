@@ -334,7 +334,7 @@ if ($firstRun) {
             Remove-Item $pwFile -Force -ErrorAction SilentlyContinue
         }
         Add-Content -Path (Join-Path $Dirs.PgData "postgresql.conf") -Encoding ascii -Value @(
-            "", "# wisper-local overrides", "port = $PgPort", "listen_addresses = '127.0.0.1'"
+            "", "# owl-launcher overrides", "port = $PgPort", "listen_addresses = '127.0.0.1'"
         )
     }
     Start-Postgres

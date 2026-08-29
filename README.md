@@ -1,4 +1,4 @@
-# wisper-local
+# owl-launcher
 
 One-command local **wisper manager stack**: `wisper.ps1` stands up PostgreSQL,
 wisper-api, wisper-web, and wisper-admin in this folder, and tears them all down
