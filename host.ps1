@@ -1,21 +1,20 @@
 ﻿# host.ps1 - local wisper HOST stack: wisp (broker) + wisp-agent, wired to the
 # wisper-api that wisper.ps1 runs on this same machine.
 #
-#   .\host.ps1 -Init <branch>                    cold start: clone + build wisp and
+#   .\host.ps1 -Init main                    cold start: clone + build wisp and
 #                                                wisp-agent from <branch>, write config,
 #                                                build the wisp-base docker image
-#                                                (-Init grunt has all isolation support;
-#                                                -AgentBranch <b> overrides the agent's
-#                                                branch; use grunt unless you know the
-#                                                branch tracks current wisper-api)
+#                                                (use main; -AgentBranch <b> overrides
+#                                                the agent's branch only if you know it
+#                                                tracks current wisper-api)
 #   .\host.ps1                                   start wisp + agent (manager must be up)
-#   .\host.ps1 -Refetch <branch> [-AgentBranch <b>]   pull, rebuild, restart
+#   .\host.ps1 -Refetch main [-AgentBranch <b>]   pull, rebuild, restart
 #   .\host.ps1 -Down                             stop wisp + agent (postgres/api untouched)
 #   .\host.ps1 -Status                           health + tunnel-online overview
 #
 # What it runs (loopback-only, no services):
 #   wisp          http://127.0.0.1:3009   broker; needs Docker running to lease
-#   wisp-agent    dials ws://127.0.0.1:3006/agent (no control panel on the grunt branch)
+#   wisp-agent    dials ws://127.0.0.1:3006/agent (no control panel on main)
 #
 # Shares this folder with wisper.ps1: repos\ (adds wisp, wisp-agent), logs\, and
 # state\stack-state.json (wck_ API key, plus host-side entries). Uses its own
@@ -234,7 +233,7 @@ $state = Get-State
 if ($null -eq $state) { $state = [pscustomobject]@{} }
 
 if ($null -eq $state.wckKey) {
-    throw "No wck_ API key in state - stand up the manager first: .\wisper.ps1 -Init <branch>"
+    throw "No wck_ API key in state - stand up the manager first: .\wisper.ps1 -Init main"
 }
 if ($null -eq $state.wispAppToken) { Set-StateProp $state "wispAppToken" (New-RandomHex 24); Save-State $state }
 
@@ -255,7 +254,7 @@ if ($Init) {
     }
 }
 if ($needClone.Count -gt 0 -and $null -eq $state.hostBranch) {
-    throw "Host not installed yet - cold start with: .\host.ps1 -Init <branch> [-AgentBranch <branch>]"
+    throw "Host not installed yet - cold start with: .\host.ps1 -Init main [-AgentBranch <branch>]"
 }
 
 function Get-RepoBranch([string]$Repo) {
@@ -372,7 +371,7 @@ if (-not $osType) { Write-Warning "docker daemon unreachable - wisp will start b
 $pids = @{}
 
 $wispExe = Join-Path $Dirs.Repos "wisp\wispd.exe"
-if (-not (Test-Path $wispExe)) { throw "wispd.exe missing - run .\host.ps1 -Init <branch>" }
+if (-not (Test-Path $wispExe)) { throw "wispd.exe missing - run .\host.ps1 -Init main" }
 $pids.wisp = Start-Svc -Name "wisp" -File $wispExe -Cwd (Split-Path $wispExe) -Env @{
     WISP_ADDR      = "127.0.0.1:$WispPort"
     WISP_CONFIG    = (Join-Path $Dirs.Config "wisp.config.json")
@@ -396,7 +395,7 @@ if ($null -eq $state.host) {
 }
 
 $agentExe = Join-Path $Dirs.Repos "wisp-agent\wisp-agent.exe"
-if (-not (Test-Path $agentExe)) { throw "wisp-agent.exe missing - run .\host.ps1 -Init <branch>" }
+if (-not (Test-Path $agentExe)) { throw "wisp-agent.exe missing - run .\host.ps1 -Init main" }
 # The agent derives the ws tunnel URL from the manager URL (http->ws, path
 # normalized to /agent), so pass our known-local manager explicitly rather than
 # trusting anything stale in state.
@@ -463,10 +462,10 @@ Write-Host "`n== host is up ==" -ForegroundColor Green
 Write-Host @"
 wisp            $WispUrl   (branch $($state.hostBranch))
 wisp-agent      tunneled to ws://127.0.0.1:$ApiPort/agent  (branch $($state.agentBranch))
-agent panel     (none on the grunt branch; the older wisp-agent-ui-grunt branch is incompatible with current wisper-api)
+agent panel     (none on main; the old wisp-agent-ui-grunt branch is incompatible with current wisper-api)
 docker mode     $osType
 
 Host 'local-host' should show online in wisper-web Host tools.
-Stop:   .\host.ps1 -Down       Update:  .\host.ps1 -Refetch <branch> [-AgentBranch <b>]
+Stop:   .\host.ps1 -Down       Update:  .\host.ps1 -Refetch main [-AgentBranch <b>]
 Status: .\host.ps1 -Status     Logs:    $($Dirs.Logs)
 "@

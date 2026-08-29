@@ -13,7 +13,7 @@ only the manager/marketplace side.
 
 ```powershell
 # first time ever (installs everything, then starts):
-.\wisper.ps1 -Init <branch>
+.\wisper.ps1 -Init main
 
 # every day after that:
 .\wisper.ps1            # start
@@ -37,8 +37,8 @@ is a config allow-list entry (`Auth__ApiKeys__<key>__*`) with the `consumer`,
 | Command | What it does |
 |---|---|
 | `.\wisper.ps1` | Start the stack. Errors with instructions if never installed; tells you if it is already running. |
-| `.\wisper.ps1 -Init <branch>` | Cold start: install + build everything from `<branch>`. On an already-installed stack, `-Init <branch>` just behaves like `-Refetch <branch>`. |
-| `.\wisper.ps1 -Refetch <branch>` | Stop the stack, `fetch` + `checkout` + fast-forward pull `<branch>` in all three repos, rebuild, restart. Database migrations (DbUp) apply automatically when wisper-api boots. |
+| `.\wisper.ps1 -Init main` | Cold start: install + build everything from `<branch>`. On an already-installed stack, `-Init main` just behaves like `-Refetch main`. |
+| `.\wisper.ps1 -Refetch main` | Stop the stack, `fetch` + `checkout` + fast-forward pull `<branch>` in all three repos, rebuild, restart. Database migrations (DbUp) apply automatically when wisper-api boots. |
 | `.\wisper.ps1 -Down` | Stop all services and postgres. Kills full process trees; nothing is left running. |
 | `.\wisper.ps1 -Status` | Per-service running/health overview + the API key. |
 
@@ -95,11 +95,11 @@ master key in the OS keychain (see below).
 
 ## Notes & gotchas
 
-- **Branch choice matters.** Active development lands on `grunt` first; as of
-  2026-08-16 the GitHub `main` branches of all six repos are in sync with
-  `grunt`, but `grunt` moves ahead between merges. You can init/refetch any
-  branch, just know what's on it. The current branch is stored in state and
-  shown in the startup summary.
+- **Use `main`.** Every repo in the stack keeps `grunt`, `dev` and `main` identical
+  (grunt is only where grunt's task branches merge first; it is fast-forwarded
+  to `dev` and `main` once verified). `-Init main` / `-Refetch main` is the
+  normal choice; any other branch works if you know what is on it. The current
+  branch is stored in state and shown in the startup summary.
 - **`-Refetch` refuses to lose work**: it pulls `--ff-only` and stops with an
   error if a repo in `repos\` has diverged or has local edits. Commit/stash or
   reset inside `repos\<name>` and re-run.
@@ -138,7 +138,7 @@ master key in the OS keychain (see below).
 3. `logs\postgres.log`: cluster-side problems.
 4. Wedged half-started stack: `.\wisper.ps1 -Down` then start again.
 5. Nuclear option for one repo: delete `repos\<name>` and run
-   `.\wisper.ps1 -Init <branch>`; only the missing repo is re-cloned.
+   `.\wisper.ps1 -Init main`; only the missing repo is re-cloned.
 
 ## The host stack (host.ps1)
 
@@ -151,25 +151,23 @@ wisp + wisp-agent), same state file (reuses the wck key), but its own pid file
 
 ```powershell
 # first time (manager must have been -Init'd already; Docker should be running):
-.\host.ps1 -Init grunt
+.\host.ps1 -Init main
 
 # daily:
 .\host.ps1              # start wisp + agent (requires the manager to be up)
 .\host.ps1 -Down        # stop host pieces only; manager keeps running
 .\host.ps1 -Status      # includes whether the tunnel shows online
-.\host.ps1 -Refetch <branch> [-AgentBranch <b>]
+.\host.ps1 -Refetch main [-AgentBranch <b>]
 ```
 
 Notes specific to the host stack:
 
-- **Use `grunt` for both repos.** `-AgentBranch <b>` overrides the wisp-agent
-  branch, but the only alternative branch, `wisp-agent-ui-grunt` (the agent's
-  embedded browser control panel on port 4600), stopped at 2026-07-23 and is
-  12 commits behind `grunt`: it lacks the capacity/heartbeat capability, the
-  resync-from-wisp-on-connect, the truthful lease lifecycle reporting and the
-  GPU pass-through that the current wisper-api expects. There is no control
-  panel on `grunt`; ignore the `agent panel http://localhost:4600` line in the
-  startup summary unless you deliberately run that older branch.
+- **Use `main` for both repos.** `-AgentBranch <b>` overrides the wisp-agent
+  branch; the only other branch that ever existed, `wisp-agent-ui-grunt` (an
+  embedded browser control panel), stopped at 2026-07-23 and is incompatible
+  with the current wisper-api (no capacity heartbeat, no resync-on-connect, no
+  truthful lease lifecycle, no GPU pass-through). There is no control panel on
+  `main`.
 - **What the agent is started with**: `--manager ws://127.0.0.1:3006/agent`,
   `--host-token <wht_ token from state>`, `--wisp http://127.0.0.1:3009`,
   `--wisp-token <wispAppToken>` and `--wisp-create-timeout <-CreateTimeout>`
@@ -228,7 +226,7 @@ Notes specific to the host stack:
 `web\`, then `npm run build` (the API runs from `dist\index.js` under node).
 
 ```powershell
-.\orchestrator.ps1 -Init grunt     # first time
+.\orchestrator.ps1 -Init main      # first time
 .\orchestrator.ps1                 # start   |   -Down stop   |   -Status health
 ```
 

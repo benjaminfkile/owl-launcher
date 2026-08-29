@@ -1,8 +1,8 @@
 ﻿# wisper.ps1 - one-command local wisper MANAGER stack (no host components).
 #
-#   .\wisper.ps1 -Init <branch>        cold start: install everything from <branch>
+#   .\wisper.ps1 -Init main        cold start: install everything from <branch>
 #   .\wisper.ps1                       start the stack (after it has been installed)
-#   .\wisper.ps1 -Refetch <branch>     pull <branch> in all repos, rebuild, restart
+#   .\wisper.ps1 -Refetch main     pull <branch> in all repos, rebuild, restart
 #                                      (-Init on an installed stack does the same)
 #   .\wisper.ps1 -Down                 stop everything (services + postgres)
 #   .\wisper.ps1 -Status               health overview
@@ -221,7 +221,7 @@ if ($Down) {
 if ($Status) {
     Write-Host "== wisper status ==" -ForegroundColor Cyan
     $st = Get-State
-    if ($null -eq $st) { Write-Host "  not installed (no state file) - run .\wisper.ps1 -Init <branch>"; return }
+    if ($null -eq $st) { Write-Host "  not installed (no state file) - run .\wisper.ps1 -Init main"; return }
     if ($null -ne $st.pgPort) { $PgPort = [int]$st.pgPort }
     $pg = Test-PgRunning
     Write-Host ("  postgres      {0}  (127.0.0.1:{1})" -f @("STOPPED", "running")[[int]$pg], $PgPort)
@@ -277,7 +277,7 @@ $needClone = @($Repos | Where-Object { -not (Test-Path (Join-Path (Join-Path $Di
 $needPg    = -not (Test-Path (Join-Path $Dirs.PgData "PG_VERSION"))
 $firstRun  = ($needClone.Count -gt 0) -or $needPg
 
-# -Init <branch>: pick the branch for a cold start; on an installed stack it is
+# -Init main: pick the branch for a cold start; on an installed stack it is
 # just a refetch of that branch.
 if ($Init) {
     if ($needClone.Count -eq 0) {
@@ -289,7 +289,7 @@ if ($Init) {
     }
 }
 if ($needClone.Count -gt 0 -and $null -eq $state.branch) {
-    throw "Not installed yet - cold start with: .\wisper.ps1 -Init <branch>"
+    throw "Not installed yet - cold start with: .\wisper.ps1 -Init main"
 }
 
 if ($firstRun) {
@@ -358,7 +358,7 @@ if ($firstRun) {
     Write-Host "== install done ==" -ForegroundColor Green
 }
 
-# ------------------------------------------------------------------ -Refetch <branch>
+# ------------------------------------------------------------------ -Refetch main
 
 if ($Refetch) {
     Write-Host "== refetch branch '$Refetch' ==" -ForegroundColor Cyan
@@ -519,6 +519,6 @@ postgres        127.0.0.1:$PgPort  (db/user wisper; folder-local, not a service)
 Sign in to wisper-web / wisper-admin by pasting the API key:
   $($state.wckKey)
 
-Stop:     .\wisper.ps1 -Down          Update:  .\wisper.ps1 -Refetch <branch>
+Stop:     .\wisper.ps1 -Down          Update:  .\wisper.ps1 -Refetch main
 Status:   .\wisper.ps1 -Status        Logs:    $($Dirs.Logs)
 "@

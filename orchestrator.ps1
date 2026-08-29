@@ -1,8 +1,8 @@
 ﻿# orchestrator.ps1 - local orchestrator, wired to the wisper stack this folder runs.
 #
-#   .\orchestrator.ps1 -Init <branch>      cold start: clone + build from <branch>
+#   .\orchestrator.ps1 -Init main      cold start: clone + build from <branch>
 #   .\orchestrator.ps1                     start (API + web UI)
-#   .\orchestrator.ps1 -Refetch <branch>   pull, rebuild, restart
+#   .\orchestrator.ps1 -Refetch main   pull, rebuild, restart
 #   .\orchestrator.ps1 -Down               stop orchestrator only
 #   .\orchestrator.ps1 -Status             health overview
 #
@@ -222,7 +222,7 @@ $state = Get-State
 if ($null -eq $state) { $state = [pscustomobject]@{} }
 
 if ($null -eq $state.wckKey) {
-    throw "No wck_ API key in state - stand up the manager first: .\wisper.ps1 -Init <branch>"
+    throw "No wck_ API key in state - stand up the manager first: .\wisper.ps1 -Init main"
 }
 
 # ------------------------------------------------------------------ install / refetch
@@ -239,7 +239,7 @@ if ($Init) {
     }
 }
 if ($needClone -and $null -eq $state.orchBranch) {
-    throw "Orchestrator not installed yet - cold start with: .\orchestrator.ps1 -Init <branch>"
+    throw "Orchestrator not installed yet - cold start with: .\orchestrator.ps1 -Init main"
 }
 
 if ($needClone) {
@@ -330,6 +330,6 @@ orchestrator web   http://localhost:$WebUiPort
 wisper wiring      v1 mode -> $WisperUrl, host 'local-host', WISPER_API_KEY seeded
 
 Full stack order:  .\wisper.ps1  ->  .\host.ps1  ->  .\orchestrator.ps1
-Stop:   .\orchestrator.ps1 -Down       Update:  .\orchestrator.ps1 -Refetch <branch>
+Stop:   .\orchestrator.ps1 -Down       Update:  .\orchestrator.ps1 -Refetch main
 Status: .\orchestrator.ps1 -Status     Logs:    $($Dirs.Logs)
 "@
