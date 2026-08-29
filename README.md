@@ -117,7 +117,7 @@ all your other projects, the Docker images host.ps1 built, and the orchestrator'
   script runs an idempotent SQL seed (`state\fund-wallet.sql`, deleted
   afterwards) against the `wisper` DB: creates the `wckUserId` user row, sets
   its `connect_status` to `enabled` (so it may advertise priced images with no
-  Stripe), inserts a 10% `platform_policy` row if none exists, and credits the
+  Stripe), layers a 10% `platform_policy` row over the 0% default that wisper-api migration 0017 seeds (skipped once any non-zero or operator-published policy exists), and credits the
   user wallet with $1,000,000,000.00 via one balanced `topup` transaction
   (idempotency key `seed:local-bootstrap-fund`). So priced leases work with no
   Stripe at all; a failed seed only warns and priced leases 402. Change

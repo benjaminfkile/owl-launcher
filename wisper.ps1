@@ -446,11 +446,13 @@ BEGIN
   -- Stripe locally, so flip it directly.
   UPDATE users SET connect_status = 'enabled' WHERE id = v_user AND connect_status <> 'enabled';
 
-  -- Paid metering needs an active platform_policy row: MeteringService's fee
-  -- split calls GetActiveOrThrowAsync, so with ZERO rows a priced lease's meter
-  -- flush throws (free leases never hit it). Seed one 10% policy if none exists.
+  -- Paid metering needs an active platform_policy row. Migration 0017 seeds a
+  -- 0% default on a fresh database, so this local stack layers a 10% policy on
+  -- top (newer effective_from wins) unless an operator-published or non-zero
+  -- policy already exists. Idempotent across restarts.
   INSERT INTO platform_policy (fee_bps)
-    SELECT 1000 WHERE NOT EXISTS (SELECT 1 FROM platform_policy);
+    SELECT 1000 WHERE NOT EXISTS (
+      SELECT 1 FROM platform_policy WHERE fee_bps <> 0 OR created_by IS NOT NULL);
 
   INSERT INTO ledger_accounts (kind, owner_user_id, currency)
     VALUES ('user_wallet', v_user, 'usd')
