@@ -95,10 +95,7 @@ master key in the OS keychain (see below).
 
 ## Notes & gotchas
 
-- **Use `main`.** Every repo in the stack keeps `grunt`, `dev` and `main` identical
-  (grunt is only where grunt's task branches merge first; it is fast-forwarded
-  to `dev` and `main` once verified). `-Init main` / `-Refetch main` is the
-  normal choice; any other branch works if you know what is on it. The current
+- **Use `main`.** Any other branch works if you know what is on it. The current
   branch is stored in state and shown in the startup summary.
 - **`-Refetch` refuses to lose work**: it pulls `--ff-only` and stops with an
   error if a repo in `repos\` has diverged or has local edits. Commit/stash or
@@ -163,11 +160,7 @@ wisp + wisp-agent), same state file (reuses the wck key), but its own pid file
 Notes specific to the host stack:
 
 - **Use `main` for both repos.** `-AgentBranch <b>` overrides the wisp-agent
-  branch; the only other branch that ever existed, `wisp-agent-ui-grunt` (an
-  embedded browser control panel), stopped at 2026-07-23 and is incompatible
-  with the current wisper-api (no capacity heartbeat, no resync-on-connect, no
-  truthful lease lifecycle, no GPU pass-through). There is no control panel on
-  `main`.
+  branch only; leave it unset unless you have a reason.
 - **What the agent is started with**: `--manager ws://127.0.0.1:3006/agent`,
   `--host-token <wht_ token from state>`, `--wisp http://127.0.0.1:3009`,
   `--wisp-token <wispAppToken>` and `--wisp-create-timeout <-CreateTimeout>`

@@ -462,7 +462,7 @@ Write-Host "`n== host is up ==" -ForegroundColor Green
 Write-Host @"
 wisp            $WispUrl   (branch $($state.hostBranch))
 wisp-agent      tunneled to ws://127.0.0.1:$ApiPort/agent  (branch $($state.agentBranch))
-agent panel     (none on main; the old wisp-agent-ui-grunt branch is incompatible with current wisper-api)
+agent panel     (none)
 docker mode     $osType
 
 Host 'local-host' should show online in wisper-web Host tools.
