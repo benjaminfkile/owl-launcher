@@ -256,6 +256,8 @@ if ($null -eq $state.pgSuperPassword)  { Set-StateProp $state "pgSuperPassword" 
 if ($null -eq $state.pgWisperPassword) { Set-StateProp $state "pgWisperPassword" (New-RandomHex 18) }
 if ($null -eq $state.wckKey)    { Set-StateProp $state "wckKey" ("wck_live_" + (New-RandomHex 32)) }
 if ($null -eq $state.wckUserId) { Set-StateProp $state "wckUserId" ([guid]::NewGuid().ToString()) }
+# wckUserId is the Cognito SUBJECT the config API key maps to (Auth__ApiKeys__<key>__UserId),
+# not the users.id row; the seed below records the actual row id as wckUserRowId.
 if ($null -eq $state.wckEmail)  { Set-StateProp $state "wckEmail" "admin@local.dev" }
 # The cluster's port is written into pgdata\postgresql.conf at initdb, so the
 # stored value wins on later runs - a changed -PgPort can't silently mismatch it.
@@ -484,6 +486,8 @@ END $fund$;
     if ($LASTEXITCODE -eq 0) {
         $bal = Invoke-Capture (Get-PgBin "psql.exe") ($pg + @("-tAc", "SELECT a.balance_cents FROM ledger_accounts a JOIN users u ON u.id = a.owner_user_id WHERE a.kind='user_wallet' AND u.cognito_sub='$($state.wckUserId)'"))
         Write-Host "  funded dev wallet: $bal cents ($($state.wckEmail))" -ForegroundColor Green
+        $rowId = Invoke-Capture (Get-PgBin "psql.exe") ($pg + @("-tAc", "SELECT id FROM users WHERE cognito_sub='$($state.wckUserId)'"))
+        if ($rowId) { Set-StateProp $state "wckUserRowId" $rowId.Trim(); Save-State $state }
     } else {
         Write-Warning "wallet funding seed failed - stack still usable but the wallet is unfunded (priced leases will 402). See logs."
     }

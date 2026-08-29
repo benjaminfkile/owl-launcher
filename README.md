@@ -81,7 +81,7 @@ state\            stack-state.json (secrets/config, shared by all three scripts)
 ```
 
 `state\stack-state.json` keys: `branch`, `pgPort`, `pgSuperPassword`,
-`pgWisperPassword`, `wckKey`, `wckUserId`, `wckEmail` (manager);
+`pgWisperPassword`, `wckKey`, `wckUserId` (the Cognito subject the key maps to, not the `users.id` row), `wckUserRowId` (the `users.id` row, recorded after the seed), `wckEmail` (manager);
 `hostBranch`, `agentBranch`, `wispAppToken`, `host` (`id`, `name`,
 `agentToken`), `hostImages`, `hostImagesPublished` (host); `orchBranch`
 (orchestrator). Plaintext; the OS user boundary is the security model.
@@ -115,7 +115,7 @@ all your other projects, the Docker images host.ps1 built, and the orchestrator'
   `0.0.0.0` without turning `Tunnel__EnableDevEndpoints` off.
 - **The dev wallet is funded on every start.** After wisper-api is healthy the
   script runs an idempotent SQL seed (`state\fund-wallet.sql`, deleted
-  afterwards) against the `wisper` DB: creates the `wckUserId` user row, sets
+  afterwards) against the `wisper` DB: creates the user row for subject `wckUserId` (row id saved as `wckUserRowId`), sets
   its `connect_status` to `enabled` (so it may advertise priced images with no
   Stripe), layers a 10% `platform_policy` row over the 0% default that wisper-api migration 0017 seeds (skipped once any non-zero or operator-published policy exists), and credits the
   user wallet with $1,000,000,000.00 via one balanced `topup` transaction
